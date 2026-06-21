@@ -4,6 +4,7 @@ import { DataSource, DataSourceOptions } from 'typeorm';
 import { Doctor } from 'src/doctors/entities/doctor.entity';
 import { Patient } from 'src/patients/entities/patient.entity';
 import { Appointment } from 'src/appointments/entities/appointment.entity';
+import { AppointmentStatus } from 'src/appointment-status/entities/appointment-status.entity';
 
 dotenv.config();
 dotenv.config({ override: true });
@@ -15,7 +16,7 @@ export const dataSourceOptions: DataSourceOptions = {
   username: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  entities: [Doctor, Patient, Appointment],
+  entities: [Patient, Doctor, Appointment, AppointmentStatus],
   synchronize: false, // Set to true only in development, false in production
   logging: process.env.NODE_ENV === 'development',
   migrations: [__dirname + '/../migrations/*{.ts,.js}'], // ⬅️  faltaba (para el CLI)

@@ -9,6 +9,7 @@ import { AppointmentsModule } from './appointments/appointments.module';
 import { PatientsModule } from './patients/patients.module';
 import { DoctorsModule } from './doctors/doctors.module';
 import { dataSourceOptions } from '@database/data-source';
+import { AppointmentStatusModule } from './appointment-status/appointment-status.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { dataSourceOptions } from '@database/data-source';
         },
       },
     }),
+    AppointmentStatusModule,
   ],
   controllers: [AppController],
   providers: [AppService],
