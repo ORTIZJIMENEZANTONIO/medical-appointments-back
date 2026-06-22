@@ -46,17 +46,24 @@ export class Appointment {
     nullable: false,
   })
   @JoinColumn({ name: 'status_id' })
-  @Column({ type: 'tinyint', name: 'status_id', default: 1 }) // 1 = ACTIVE
+  status: AppointmentStatus;
+
+  @Column({ type: 'tinyint', name: 'status_id', default: 1 })
   statusId: number;
 
-  @Column()
-  reason: string;
+  @Column({ type: 'varchar', length: 255, nullable: true, default: null })
+  reason: string | null;
 
   /** Fecha + hora de inicio. Duración fija 30min → el fin se deriva (DATEADD en el overlap). */
   @Column({ type: 'datetime2', precision: 0, name: 'appointment_date' })
   appointmentDate: Date;
 
-  @CreateDateColumn({ type: 'datetime2', precision: 0, name: 'created_at' })
+  @CreateDateColumn({
+    type: 'datetime2',
+    precision: 0,
+    default: () => 'GETDATE()',
+    name: 'created_at',
+  })
   createdAt: Date;
 
   @Column({
