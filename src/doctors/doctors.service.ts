@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Doctor } from './entities/doctor.entity';
 import { CreateDoctorDto } from './dto/create-doctor.dto';
+import { ERRORS } from '@/common/constants/messages';
 
 @Injectable()
 export class DoctorsService {
@@ -20,9 +21,7 @@ export class DoctorsService {
       where: { email: createDoctorDto.email },
     });
     if (exists) {
-      throw new ConflictException(
-        `Ya existe un doctor con el email ${createDoctorDto.email}`,
-      );
+      throw new ConflictException(ERRORS.EMAIL_ALREADY_REGISTERED);
     }
     const doctor = this.doctorsRepository.create(createDoctorDto);
     return this.doctorsRepository.save(doctor);
@@ -34,7 +33,7 @@ export class DoctorsService {
 
   async findOne(id: number): Promise<Doctor> {
     const doctor = await this.doctorsRepository.findOne({ where: { id } });
-    if (!doctor) throw new NotFoundException(`Doctor ${id} no existe`);
+    if (!doctor) throw new NotFoundException(ERRORS.DOCTOR_NOT_FOUND);
     return doctor;
   }
 }

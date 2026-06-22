@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { DomainException } from '../exceptions/domain.exception';
+import { ERRORS } from '@/common/constants/messages';
 import { PinoLogger } from 'nestjs-pino';
 
 @Catch()
@@ -22,7 +23,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const req = ctx.getRequest<Request>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message: string | string[] = 'Error interno del servidor';
+    let message: string | string[] = ERRORS.INTERNAL;
     let error = 'InternalServerError';
 
     if (exception instanceof DomainException) {

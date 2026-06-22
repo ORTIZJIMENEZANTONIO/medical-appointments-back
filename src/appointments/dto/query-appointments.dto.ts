@@ -1,34 +1,36 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsPositive, IsIn } from 'class-validator';
+import { IsIn, IsInt, IsISO8601, IsOptional, IsPositive } from 'class-validator';
+import { VALIDATION } from '@/common/constants/messages';
 
 export class QueryAppointmentsDto {
-  @ApiPropertyOptional({ type: Number, description: 'ID del doctor' })
-  @Type(() => Number)
+  @ApiPropertyOptional({ type: Number, description: 'Filtrar por doctor' })
   @IsOptional()
-  @IsInt()
-  @IsPositive()
+  @Type(() => Number)
+  @IsInt({ message: VALIDATION.ID_INT })
+  @IsPositive({ message: VALIDATION.ID_POSITIVE })
   doctorId?: number;
 
-  @ApiPropertyOptional({ type: Number, description: 'ID del paciente' })
-  @Type(() => Number)
+  @ApiPropertyOptional({ type: Number, description: 'Filtrar por paciente' })
   @IsOptional()
-  @IsInt()
-  @IsPositive()
+  @Type(() => Number)
+  @IsInt({ message: VALIDATION.ID_INT })
+  @IsPositive({ message: VALIDATION.ID_POSITIVE })
   patientId?: number;
 
   @ApiPropertyOptional({ enum: [1, 2], description: '1=ACTIVE, 2=CANCELLED' })
   @IsOptional()
   @Type(() => Number)
-  @IsInt()
-  @IsIn([1, 2], { message: 'El statusId debe ser 1 (ACTIVE) o 2 (CANCELLED)' })
+  @IsIn([1, 2], { message: VALIDATION.STATUS_INVALID })
   statusId?: number;
 
-  @ApiPropertyOptional({ type: String, description: 'Fecha de inicio' })
+  @ApiPropertyOptional({ type: String, description: 'Desde (ISO 8601)' })
   @IsOptional()
+  @IsISO8601({}, { message: VALIDATION.DATE_RANGE_ISO })
   startDate?: string;
 
-  @ApiPropertyOptional({ type: String, description: 'Fecha de fin' })
+  @ApiPropertyOptional({ type: String, description: 'Hasta (ISO 8601)' })
   @IsOptional()
+  @IsISO8601({}, { message: VALIDATION.DATE_RANGE_ISO })
   endDate?: string;
 }

@@ -5,15 +5,15 @@ import {
   ValidatorConstraint,
   ValidatorConstraintInterface,
 } from 'class-validator';
+import { VALIDATION } from '@/common/constants/messages';
 
 export interface FutureDateOptions {
-  minMinutes?: number; // Opcional: número mínimo de minutos en el futuro
-  maxMonths?: number; // Opcional: número máximo de meses en el futuro
+  minMinutes?: number; // antelación mínima (ej. 60 = 1 hora)
+  maxMonths?: number; // horizonte máximo (ej. 6 meses)
 }
 
 @ValidatorConstraint({ name: 'isFutureDate', async: false })
 export class IsFutureDateConstraint implements ValidatorConstraintInterface {
-  /* Validación personalizada para fechas futuras no mayores a x fecha y no menores a y tiempo*/
   validate(value: unknown, args: ValidationArguments): boolean {
     const date = value instanceof Date ? value : new Date(value as string);
     if (Number.isNaN(date.getTime())) return false;
@@ -21,34 +21,32 @@ export class IsFutureDateConstraint implements ValidatorConstraintInterface {
     const [opts = {}] = args.constraints as [FutureDateOptions?];
     const now = Date.now();
 
+    // Debe ser estrictamente futura (epoch = UTC, sin ambigüedad de zona horaria)
     if (date.getTime() <= now) return false;
 
-    const { maxMonths, minMinutes } = opts;
-
-    /* Antelación mínima */
-    if (minMinutes) {
+    // Antelación mínima
+    if (opts.minMinutes) {
       const limit = new Date();
-      limit.setMinutes(limit.getMinutes() + minMinutes);
+      limit.setMinutes(limit.getMinutes() + opts.minMinutes);
       if (date.getTime() < limit.getTime()) return false;
     }
 
-    //  Validación tope futuro (ej. no más de 6 meses)
-    if (maxMonths) {
+    // Horizonte máximo
+    if (opts.maxMonths) {
       const limit = new Date();
-      limit.setMonth(limit.getMonth() + maxMonths);
+      limit.setMonth(limit.getMonth() + opts.maxMonths);
       if (date.getTime() > limit.getTime()) return false;
     }
 
     return true;
   }
+
   defaultMessage(args: ValidationArguments): string {
     const [opts = {}] = args.constraints as [FutureDateOptions?];
-    const { maxMonths, minMinutes } = opts;
-    return maxMonths
-      ? `${args.property} debe ser futura y no mayor a ${maxMonths} meses`
-      : `${args.property} debe ser una fecha y hora futura`;
+    return VALIDATION.DATE_FUTURE_WINDOW(opts);
   }
 }
+
 export function IsFutureDate(
   maxMonths?: number,
   minMinutes?: number,
