@@ -46,9 +46,6 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         `${req.method} ${req.url} → ${status}`,
         exception instanceof Error ? exception.stack : String(exception),
       );
-      this.logger.warn(
-        `${req.method} ${req.url} → ${status}: ${JSON.stringify(message)}`,
-      );
     }
 
     res.status(status).json({

@@ -15,7 +15,7 @@ export class CreateDoctorDto {
     example: 'Juan',
   })
   @IsString({ message: 'El nombre debe ser una cadena de texto' })
-  @MaxLength(20, { message: 'El nombre no puede tener más de 20 caracteres' })
+  @MaxLength(50, { message: 'El nombre no puede tener más de 20 caracteres' })
   name: string;
 
   @ApiProperty({
@@ -23,7 +23,7 @@ export class CreateDoctorDto {
     example: 'Pérez',
   })
   @IsString({ message: 'El primer apellido debe ser una cadena de texto' })
-  @MaxLength(20, {
+  @MaxLength(50, {
     message: 'El primer apellido no puede tener más de 20 caracteres',
   })
   lastname1: string;
@@ -34,7 +34,7 @@ export class CreateDoctorDto {
   })
   @IsOptional()
   @IsString({ message: 'El segundo apellido debe ser una cadena de texto' })
-  @MaxLength(20, {
+  @MaxLength(50, {
     message: 'El segundo apellido no puede tener más de 20 caracteres',
   })
   lastname2?: string | null;

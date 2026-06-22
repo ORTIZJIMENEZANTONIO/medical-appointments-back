@@ -11,6 +11,6 @@ export class UpdateAppointmentStatusDto extends PartialType(
     example: 'ACTIVE',
   })
   @IsString()
-  @MaxLength(30)
+  @MaxLength(50)
   name: string;
 }

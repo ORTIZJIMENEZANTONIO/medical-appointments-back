@@ -7,6 +7,6 @@ export class CreateAppointmentStatusDto {
     example: 'ACTIVE',
   })
   @IsString()
-  @MaxLength(30)
+  @MaxLength(50)
   name: string;
 }

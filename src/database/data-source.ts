@@ -6,7 +6,6 @@ import { Patient } from 'src/patients/entities/patient.entity';
 import { Appointment } from 'src/appointments/entities/appointment.entity';
 import { AppointmentStatus } from 'src/appointment-status/entities/appointment-status.entity';
 
-dotenv.config();
 dotenv.config({ override: true });
 
 export const dataSourceOptions: DataSourceOptions = {
