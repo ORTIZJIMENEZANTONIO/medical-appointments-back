@@ -43,8 +43,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     if (status >= 500) {
       this.logger.error(
-        `${req.method} ${req.url} → ${status}`,
-        exception instanceof Error ? exception.stack : String(exception),
+        { err: exception, method: req.method, url: req.url, status },
+        'Unhandled exception',
       );
     }
 

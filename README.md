@@ -148,7 +148,7 @@ Base URL: `http://localhost:3000`
 ### Citas
 | Método | Ruta | Descripción | Códigos |
 |--------|------|-------------|---------|
-| `POST` | `/appointments` | Agendar cita | `201` · `404` (doctor/paciente) · `409` (empalme) · `422` (fecha pasada) |
+| `POST` | `/appointments` | Agendar cita | `201` · `400` (validación: fecha pasada/inválida) · `404` (doctor/paciente) · `409` (empalme) |
 | `GET` | `/appointments` | Listar citas (filtros: `doctorId`, `from`, `to`, `status`) | `200` |
 | `PATCH` | `/appointments/:id/cancel` | Cancelar cita | `200` · `404` · `409` |
 
@@ -213,19 +213,32 @@ cancelled_at (nullable)
   con `TINYINT` (0–255, el "unsigned" natural de SQL Server).
 
 - **Errores de dominio desacoplados del transporte**: el service lanza excepciones de negocio
-  (`AppointmentOverlapException`, `PastDateException`); un `GlobalExceptionFilter` las traduce a
-  HTTP con un formato de error consistente. El service nunca conoce HTTP → es testeable puro.
+  (`AppointmentOverlapException` → 409) y las de Nest (`NotFoundException` → 404,
+  `ConflictException` → 409); un `GlobalExceptionFilter` las traduce a HTTP con un formato de
+  error consistente. El service nunca conoce HTTP → es testeable puro.
 
 ### Notas específicas de SQL Server
 - **No existe `UNSIGNED`** salvo `TINYINT`. Por eso los PK son `INT IDENTITY` (siempre positivos
   en la práctica) y el catálogo de estados usa `TINYINT`.
 - Tipo de fecha: **`datetime2`** (más preciso y con mayor rango que `datetime`).
-- El traslape se evalúa con **transacción `SERIALIZABLE`** / `UPDLOCK, HOLDLOCK` sobre el doctor,
-  equivalente al `SELECT ... FOR UPDATE` de otros motores.
+- El traslape se resuelve con **lock pesimista** (`setLock('pessimistic_write')` → `WITH (UPDLOCK, ROWLOCK)`)
+  sobre la fila del doctor dentro de una transacción — equivalente al `SELECT ... FOR UPDATE` de otros
+  motores. Serializa las reservas por doctor; doctores distintos siguen en paralelo.
 
 ### Decisiones de dominio (México)
-- **Teléfono**: 10 dígitos numéricos (estándar nacional MX desde 2022), almacenado sin formato.
+- **Teléfono**: 10 dígitos numéricos (estándar nacional MX desde 2022), almacenado **como string** —
+  un teléfono no es un número (no se hace aritmética con él y podría perder ceros a la izquierda).
 - **Apellido materno (`lastname2`) opcional**: en México no es obligatorio tener segundo apellido.
+
+### Zona horaria (UTC)
+- **Toda fecha se maneja y almacena en UTC.** La API recibe `appointmentDate` en **ISO 8601 con zona**
+  (ej. `2026-07-01T10:00:00Z`); el cliente envía la hora con su offset y el backend trabaja el instante
+  en UTC.
+- En SQL Server la columna es `datetime2` (sin zona): se guarda el instante ya normalizado. El chequeo de
+  solapamiento y el de "fecha futura" comparan con el epoch (`Date.getTime()` / `Date.now()`), que es
+  **siempre UTC** → sin ambigüedad por horario de verano.
+- **Por qué importa**: en agendas médicas el manejo inconsistente de zonas es causa clásica de
+  "empalmes fantasma". Centralizar en UTC y dejar la presentación local al frontend elimina esa clase de bug.
 
 ---
 
@@ -235,7 +248,8 @@ cancelled_at (nullable)
    (`DATEADD(minute, 30, appointment_date)`).
 2. **Un doctor no puede tener citas que se traslapen.** Se valida que no exista otra cita
    **activa** del mismo doctor cuyo intervalo `[inicio, inicio+30min)` se cruce con el nuevo.
-3. **Solo fechas/horas futuras.** Una cita en el pasado se rechaza con `422`.
+3. **Solo fechas/horas futuras.** Validado en el DTO con `@IsFutureDate`; una fecha pasada (o fuera de
+   la ventana permitida) se rechaza con `400`.
 4. **Estados**: `ACTIVE` (1) / `CANCELLED` (2). Cancelar no borra — cambia el estado y sella
    `cancelled_at`.
 5. **Las citas canceladas no bloquean disponibilidad**: el chequeo de traslape solo considera

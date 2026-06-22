@@ -8,7 +8,6 @@ import { DataSource } from 'typeorm';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
-import { UpdateAppointmentDto } from './dto/update-appointment.dto';
 import { Appointment } from './entities/appointment.entity';
 import { QueryAppointmentsDto } from './dto/query-appointments.dto';
 import { Doctor } from '@/doctors/entities/doctor.entity';
@@ -161,13 +160,5 @@ export class AppointmentsService {
 
       return await manager.save(appointment);
     });
-  }
-
-  update(id: number, updateAppointmentDto: UpdateAppointmentDto) {
-    return `This action updates a #${id} appointment`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} appointment`;
   }
 }

@@ -6,6 +6,7 @@ import { Patient } from 'src/patients/entities/patient.entity';
 import { Appointment } from 'src/appointments/entities/appointment.entity';
 import { AppointmentStatus } from 'src/appointment-status/entities/appointment-status.entity';
 
+// El .env sobrescribe cualquier variable ya presente en el shell.
 dotenv.config({ override: true });
 
 export const dataSourceOptions: DataSourceOptions = {
@@ -16,22 +17,15 @@ export const dataSourceOptions: DataSourceOptions = {
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   entities: [Patient, Doctor, Appointment, AppointmentStatus],
-  synchronize: false, // Set to true only in development, false in production
+  migrations: [__dirname + '/../migrations/*{.ts,.js}'],
+  synchronize: false, // las migraciones son la única fuente de verdad del schema
   logging: process.env.NODE_ENV === 'development',
-  migrations: [__dirname + '/../migrations/*{.ts,.js}'], // ⬅️  faltaba (para el CLI)
   options: {
-    encrypt: false, // local; en prod: true con cert válido
-    trustServerCertificate: true, // ⬅️  ESTO silencia el self-signed certificate
+    encrypt: false, // local; en prod: true con certificado válido
+    trustServerCertificate: true, // confía en el cert autofirmado del contenedor local
   },
 };
 
+// Usado por el CLI de TypeORM (migration:generate / run / revert)
 export const AppDataSource = new DataSource(dataSourceOptions);
-
-export const initializeDataSource = async () => {
-  try {
-    await AppDataSource.initialize();
-    console.log('Data Source has been initialized!');
-  } catch (err) {
-    console.error('Error during Data Source initialization:', err);
-  }
-};
+export default AppDataSource;
