@@ -2,11 +2,24 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { Logger } from 'nestjs-pino';
 import { ValidationPipe } from '@nestjs/common';
-import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
+import { json } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
+  /** Helmet para encabezado de peticiones */
+  app.use(helmet());
+
+  app.enableCors({
+    origin: [
+      '*',
+    ] /** Orígenes permitidos (NO SE DEBE DEJAR *, solo es para entornos de desarrollo) */,
+    methods: ['GET', 'POST', 'PATCH'],
+  });
+
+  app.use(json({ limit: '64kb' }));
 
   /* pino como logger de Nest */
   app.useLogger(app.get(Logger));

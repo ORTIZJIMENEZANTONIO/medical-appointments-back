@@ -187,4 +187,71 @@ describe('Appointments (integration, real DB)', () => {
       AppointmentOverlapException,
     );
   });
+
+  it('CON-03: 100 intentos simultáneos del mismo slot → exactamente 1 cita creada', async () => {
+    const { doctor, patient } = await seedDoctorPatient();
+    const date = inMinutes(1440);
+    const ATTEMPTS = 100;
+
+    const results = await Promise.allSettled(
+      Array.from({ length: ATTEMPTS }, () =>
+        appointments.create({
+          doctorId: doctor.id,
+          patientId: patient.id,
+          appointmentDate: date,
+          reason: null,
+        } as never),
+      ),
+    );
+
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+
+    // Exactamente una creación exitosa; el resto rechazadas.
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(ATTEMPTS - 1);
+
+    // Invariante DURO: en la BD existe UNA sola cita para ese doctor/horario.
+    const rows: Array<{ count: number }> = await dataSource.query(
+      'SELECT COUNT(*) AS count FROM appointments WHERE doctor_id = @0',
+      [doctor.id],
+    );
+    expect(Number(rows[0].count)).toBe(1);
+
+    // Todos los rechazos son por empalme (el lock serializó; no fueron errores transitorios).
+    const overlaps = rejected.filter(
+      (r) =>
+        (r as PromiseRejectedResult).reason instanceof
+        AppointmentOverlapException,
+    );
+    expect(overlaps).toHaveLength(ATTEMPTS - 1);
+  });
+
+  it('CON-04: 100 citas simultáneas, mismo doctor pero horarios distintos → las 100 se crean', async () => {
+    const { doctor, patient } = await seedDoctorPatient();
+    const base = inMinutes(1440);
+    const ATTEMPTS = 100;
+
+    // Cada cita arranca 30 min después de la anterior → no se traslapan entre sí.
+    const results = await Promise.allSettled(
+      Array.from({ length: ATTEMPTS }, (_, i) =>
+        appointments.create({
+          doctorId: doctor.id,
+          patientId: patient.id,
+          appointmentDate: new Date(base.getTime() + i * 30 * 60_000),
+          reason: null,
+        } as never),
+      ),
+    );
+
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    // Ninguna choca → las 100 se crean (aunque el lock las serialice por doctor).
+    expect(fulfilled).toHaveLength(ATTEMPTS);
+
+    const rows: Array<{ count: number }> = await dataSource.query(
+      'SELECT COUNT(*) AS count FROM appointments WHERE doctor_id = @0',
+      [doctor.id],
+    );
+    expect(Number(rows[0].count)).toBe(ATTEMPTS);
+  });
 });

@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
-import { APP_FILTER } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { DataSourceOptions } from 'typeorm';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { PatientsModule } from './patients/patients.module';
@@ -14,6 +15,10 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRoot(dataSourceOptions as DataSourceOptions),
+    ThrottlerModule.forRoot({
+      ttl: 60 /* ventana de 60 segundos */,
+      limit: 100 /* máx 100 solicitudes por IP */,
+    } as any),
     LoggerModule.forRoot({
       pinoHttp: {
         transport:
@@ -30,6 +35,10 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
     {
       provide: APP_FILTER,
       useClass: GlobalExceptionFilter,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
     },
   ],
 })
