@@ -35,7 +35,8 @@ export class CreateAppointmentDto {
   @Type(() => Date)
   @IsDate({ message: 'La fecha debe ser válida (ISO 8601)' })
   @IsFutureDate(6, 60, {
-    message: 'La fecha debe ser futura y no más de 6 meses en el futuro',
+    message:
+      'La fecha ingresada debe ser posterior al día de hoy y no puede exceder los próximos 6 meses.',
   })
   appointmentDate: Date;
 
