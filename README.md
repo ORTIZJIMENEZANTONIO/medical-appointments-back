@@ -1,256 +1,140 @@
 # Medical Appointments API
 
-API REST para **agendar citas médicas** entre doctores y pacientes, resolviendo el
-problema central de **evitar el empalme (traslape) de citas por doctor** bajo concurrencia.
+API REST para agendar citas médicas entre doctores y pacientes, evitando el empalme
+(traslape) de citas por doctor.
 
-Construida con **NestJS + TypeORM + SQL Server**, con migraciones versionadas, validación
-de entrada, manejo de errores centralizado y logging estructurado.
+## Stack
 
----
+- Node.js 22 · NestJS 11
+- TypeORM (migraciones) · MySQL 8
+- Validación: class-validator
+- Documentación: Swagger (`/api/docs`)
+- Logging: pino
 
-## 📋 Tabla de contenido
-- [Stack](#-stack)
-- [Requisitos previos](#-requisitos-previos)
-- [Puesta en marcha (cualquier máquina)](#-puesta-en-marcha-cualquier-máquina)
-- [Variables de entorno](#-variables-de-entorno)
-- [Scripts disponibles](#-scripts-disponibles)
-- [Endpoints](#-endpoints)
-- [Modelo de datos](#-modelo-de-datos)
-- [Decisiones de arquitectura](#-decisiones-de-arquitectura)
-- [Reglas de negocio](#-reglas-de-negocio)
-- [Pruebas](#-pruebas)
-- [Notas y solución de problemas](#-notas-y-solución-de-problemas)
+## Requisitos previos
 
----
+- Docker y Docker Compose
+- Node.js 22.x
+- Yarn
 
-## 🧱 Stack
+## Instalación y ejecución
 
-| Capa | Tecnología |
-|------|------------|
-| Runtime | Node.js **22.x** |
-| Framework | NestJS **11** |
-| ORM | TypeORM **0.3** (migraciones, sin `synchronize`) |
-| Base de datos | SQL Server **2022** (vía Docker) |
-| Validación | class-validator + class-transformer |
-| Documentación | Swagger / OpenAPI (`@nestjs/swagger`) |
-| Logging | pino (`nestjs-pino`) |
-| Build dev | SWC (compilación rápida + resolución de path aliases) |
+1. Instalar dependencias:
 
----
+   ```bash
+   yarn install
+   ```
 
-## ✅ Requisitos previos
+2. Configurar variables de entorno (los valores por defecto coinciden con `docker-compose.yml`):
 
-Solo necesitas tener instalado:
+   ```bash
+   cp .env.example .env
+   ```
 
-- **Docker** y **Docker Compose** (para la base de datos, no requiere instalar SQL Server)
-- **Node.js 22.x** ([nvm](https://github.com/nvm-sh/nvm): `nvm install 22 && nvm use 22`)
-- **Yarn** (`npm i -g yarn`)
+3. Levantar MySQL (el contenedor crea la base `medical_appointments` automáticamente):
 
-> No necesitas instalar SQL Server en tu máquina: corre dentro de un contenedor.
+   ```bash
+   docker compose up -d
+   ```
 
----
+   Esperar ~10-20 s la primera vez a que MySQL acepte conexiones.
 
-## 🚀 Puesta en marcha (cualquier máquina)
+4. Crear la base de pruebas (solo necesaria para `yarn test:int` / `test:e2e`):
 
-### 1. Clonar e instalar dependencias
-```bash
-git clone <url-del-repo>
-cd medical-appointments-back
-yarn install
-```
+   ```bash
+   docker exec medical-mysql mysql -uroot -pPromass@2026 \
+     -e "CREATE DATABASE IF NOT EXISTS medical_appointments_test"
+   ```
 
-### 2. Configurar variables de entorno
-```bash
-cp .env.example .env
-```
-Los valores por defecto ya coinciden con `docker-compose.yml`, así que **funciona sin editar nada** en local.
+5. Ejecutar migraciones (crea tablas y siembra el catálogo de estados):
 
-### 3. Levantar la base de datos (SQL Server en Docker)
-```bash
-docker compose up -d
-```
-Espera ~30–60 s la primera vez a que el contenedor termine de arrancar.
+   ```bash
+   yarn migration:run
+   ```
 
-### 4. Crear la base de datos
-El contenedor arranca solo con las bases de sistema; hay que crear la de la app (idempotente):
-```bash
-docker exec -it medical-sqlserver /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P 'Promass@2026' -C \
-  -Q "IF DB_ID('medical_appointments') IS NULL CREATE DATABASE medical_appointments"
-```
-> En **Windows (PowerShell/CMD)** usa comillas dobles alrededor del password y la query.
+6. Arrancar la API:
 
-### 5. Ejecutar migraciones (crea tablas + siembra el catálogo de estados)
-```bash
-yarn migration:run
-```
+   ```bash
+   yarn start:dev
+   ```
 
-### 6. Arrancar la API
-```bash
-yarn start:dev
-```
+La API queda en `http://localhost:3000` y la documentación Swagger en
+`http://localhost:3000/api/docs`.
 
-La API queda en **http://localhost:3000** y la documentación Swagger en
-**http://localhost:3000/api/docs**.
+## Variables de entorno
 
----
+| Variable      | Descripción                                  | Default                |
+| ------------- | -------------------------------------------- | ---------------------- |
+| `PORT`        | Puerto de la API                             | `3000`                 |
+| `NODE_ENV`    | `development` \| `production`                | `development`          |
+| `DB_HOST`     | Host de MySQL                                | `localhost`            |
+| `DB_PORT`     | Puerto de MySQL                              | `3306`                 |
+| `DB_USERNAME` | Usuario                                      | `root`                 |
+| `DB_PASSWORD` | Contraseña (coincide con `docker-compose.yml`) | `Promass@2026`       |
+| `DB_NAME`     | Nombre de la base                            | `medical_appointments` |
+| `LOG_LEVEL`   | Nivel de log de pino                         | `info`                 |
 
-## 🔑 Variables de entorno
+## Scripts
 
-| Variable | Descripción | Default |
-|----------|-------------|---------|
-| `PORT` | Puerto de la API | `3000` |
-| `NODE_ENV` | `development` \| `production` | `development` |
-| `DB_HOST` | Host de SQL Server | `localhost` |
-| `DB_PORT` | Puerto de SQL Server | `1433` |
-| `DB_USERNAME` | Usuario | `sa` |
-| `DB_PASSWORD` | Contraseña (debe coincidir con `docker-compose.yml`) | `Promass@2026` |
-| `DB_NAME` | Nombre de la base | `medical_appointments` |
-| `LOG_LEVEL` | Nivel de log de pino | `info` |
+| Comando                  | Descripción                          |
+| ------------------------ | ------------------------------------ |
+| `yarn start:dev`         | Arranca en modo watch                |
+| `yarn start:prod`        | Arranca el build de producción       |
+| `yarn build`             | Compila a `dist/`                    |
+| `yarn migration:run`     | Aplica las migraciones pendientes    |
+| `yarn migration:revert`  | Revierte la última migración         |
+| `yarn migration:generate`| Genera una migración desde entidades |
+| `yarn test`              | Pruebas unitarias (sin DB)           |
+| `yarn test:int`          | Pruebas de integración (DB real)     |
+| `yarn test:e2e`          | Pruebas end-to-end (HTTP + DB)       |
+| `yarn lint`              | Linter (ESLint + Prettier)           |
 
-> ⚠️ Para **producción**: cambia `DB_PASSWORD`, usa `encrypt: true` con certificado válido,
-> y nunca subas el `.env` (está en `.gitignore`).
-
----
-
-## 📜 Scripts disponibles
-
-| Comando | Descripción |
-|---------|-------------|
-| `yarn start:dev` | Arranca en modo watch (SWC) |
-| `yarn start:prod` | Arranca el build de producción (`node dist/main`) |
-| `yarn build` | Compila a `dist/` |
-| `yarn migration:run` | Aplica las migraciones pendientes |
-| `yarn migration:revert` | Revierte la última migración |
-| `yarn migration:generate` | Genera una migración nueva desde las entidades *(solo en desarrollo)* |
-| `yarn test` | Pruebas unitarias (sin DB) |
-| `yarn test:int` | Pruebas de integración (DB real) |
-| `yarn test:e2e` | Pruebas end-to-end (HTTP + DB) |
-| `yarn lint` | Linter (ESLint + Prettier) |
-
----
-
-## 🌐 Endpoints
+## Endpoints
 
 Base URL: `http://localhost:3000`
 
-### Doctores
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| `POST` | `/doctors` | Registrar doctor |
-| `GET` | `/doctors` | Listar doctores |
+Doctores:
 
-### Pacientes
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| `POST` | `/patients` | Registrar paciente |
-| `GET` | `/patients` | Listar pacientes |
+- `POST /doctors` — registrar doctor
+- `GET  /doctors` — listar doctores
 
-### Citas
-| Método | Ruta | Descripción | Códigos |
-|--------|------|-------------|---------|
-| `POST` | `/appointments` | Agendar cita | `201` · `400` (validación: fecha pasada/inválida) · `404` (doctor/paciente) · `409` (empalme) |
-| `GET` | `/appointments` | Listar citas (filtros: `doctorId`, `from`, `to`, `status`) | `200` |
-| `PATCH` | `/appointments/:id/cancel` | Cancelar cita | `200` · `404` · `409` |
+Pacientes:
 
-> La documentación interactiva completa (request/response, ejemplos, esquemas) vive en
-> **`/api/docs`**.
+- `POST /patients` — registrar paciente
+- `GET  /patients` — listar pacientes
 
----
+Citas:
 
-## 🗃️ Modelo de datos
+- `POST  /appointments` — agendar cita (`201` · `400` validación · `404` doctor/paciente · `409` empalme)
+- `GET   /appointments` — listar con filtros: `doctorId`, `startDate`, `endDate`, `statusId`
+- `GET   /appointments/:id` — detalle
+- `PATCH /appointments/:id/cancel` — cancelar (`200` · `404` · `409`)
 
-```
-doctors                 patients                appointment_status (catálogo)
-─────────               ─────────               ──────────────────
-id (PK, INT IDENTITY)   id (PK, INT IDENTITY)   id (PK, TINYINT)  → 1=ACTIVE, 2=CANCELLED
-name                    name                    name
-lastname1               lastname1
-lastname2 (opcional)    lastname2 (opcional)
-email (UNIQUE)          email (UNIQUE)
-phone (10 dígitos)      phone (10 dígitos)
-specialty
-created_at              created_at
+El detalle interactivo (request/response, ejemplos) está en `/api/docs`.
 
-appointments
-────────────
-id (PK, INT IDENTITY)
-doctor_id   (FK → doctors)
-patient_id  (FK → patients)
-status_id   (FK → appointment_status, default 1=ACTIVE)
-appointment_date (datetime2)   ← inicio; la cita dura 30 min fijos (el fin se deriva)
-reason
-created_at
-cancelled_at (nullable)
+## Decisiones de diseño
 
-Índices:
-  IDX_overlap_check       (doctor_id, status_id, appointment_date)  → acelera el chequeo de empalme
-  UQ_doctor_active_slot   UNIQUE (doctor_id, appointment_date) WHERE status_id = 1
-                          → defensa a nivel DB contra doble-booking exacto (filtered index de SQL Server)
-```
+- **Doctores y pacientes en tablas separadas**: son entidades de dominio distintas; las FK
+  separadas garantizan la integridad sin validar roles en código.
+- **Estado de la cita en catálogo** (`appointment_status`) en vez de un enum suelto.
+- **Cita de 30 min fija**: solo se guarda el inicio; el fin se deriva.
+- **No traslape por doctor**: dentro de una transacción se toma un lock pesimista sobre la
+  fila del doctor y se valida el solapamiento, de modo que el "verificar + insertar" es
+  atómico bajo concurrencia. Las citas canceladas no se consideran (solo estado activo).
+- **Fechas en UTC** (ISO 8601 con zona); las comparaciones usan el epoch para evitar bugs
+  de zona horaria.
+- **Validación con DTOs + `ValidationPipe`** (whitelist); los errores se traducen a códigos
+  HTTP consistentes mediante un filtro global.
 
----
+## Pruebas
 
-### Decisiones de dominio (México)
-- **Teléfono**: 10 dígitos numéricos (estándar nacional MX desde 2022), almacenado **como string** —
-  un teléfono no es un número (no se hace aritmética con él y podría perder ceros a la izquierda).
-- **Apellido materno (`lastname2`) opcional**: en México no es obligatorio tener segundo apellido.
+Estrategia en pirámide. La matriz de casos está en [`docs/test-matrix.md`](docs/test-matrix.md).
 
-### Zona horaria (UTC)
-- **Toda fecha se maneja y almacena en UTC.** La API recibe `appointmentDate` en **ISO 8601 con zona**
-  (ej. `2026-07-01T10:00:00Z`); el cliente envía la hora con su offset y el backend trabaja el instante
-  en UTC.
-- En SQL Server la columna es `datetime2` (sin zona): se guarda el instante ya normalizado. El chequeo de
-  solapamiento y el de "fecha futura" comparan con el epoch (`Date.getTime()` / `Date.now()`), que es
-  **siempre UTC** → sin ambigüedad por horario de verano.
-- **Por qué importa**: en agendas médicas el manejo inconsistente de zonas es causa clásica de
-  "empalmes fantasma". Centralizar en UTC y dejar la presentación local al frontend elimina esa clase de bug.
+| Capa        | Comando         | DB  | Qué valida                                                   |
+| ----------- | --------------- | --- | ------------------------------------------------------------ |
+| Unitarias   | `yarn test`     | No  | Lógica de services y del validador de fecha                  |
+| Integración | `yarn test:int` | Sí  | Overlap, back-to-back, cancelación libera horario, concurrencia |
+| End-to-end  | `yarn test:e2e` | Sí  | Stack HTTP completo (ruteo, validación, filtro de errores)   |
 
-
----
-
-## 🧪 Pruebas
-
-Estrategia en **pirámide** (muchas unit, algunas de integración, pocas e2e). La matriz
-completa de casos está en [`docs/test-matrix.md`](docs/test-matrix.md).
-
-| Capa | Comando | Necesita DB | Qué valida |
-|------|---------|-------------|------------|
-| Unitarias | `yarn test` | ❌ (repos mockeados) | Lógica de services y del validador de fecha |
-| Integración | `yarn test:int` | ✅ | Overlap real (SQL), back-to-back, multi-doctor, cancelación libera horario, **concurrencia** |
-| End-to-end | `yarn test:e2e` | ✅ | Stack HTTP completo: ruteo, `ValidationPipe`, filtro de errores, persistencia |
-
-**Base de datos de prueba** (solo para `test:int` / `test:e2e`): se usa una BD separada
-`${DB_NAME}_test` con auto-schema (no toca datos de desarrollo). Créala una vez:
-
-```bash
-docker exec -it medical-sqlserver /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P 'Promass@2026' -C \
-  -Q "IF DB_ID('medical_appointments_test') IS NULL CREATE DATABASE medical_appointments_test"
-```
-
-Casos clave cubiertos (núcleo de la prueba):
-- **Empalme** del mismo doctor → `409` (CIT-08).
-- **Back-to-back** (cita exactamente +30 min) → permitido `201` (CIT-10).
-- Cita en horario de una cita **cancelada** → permitido `201` (CIT-12 / CAN-05).
-- **Concurrencia**: dos creaciones simultáneas del mismo slot → exactamente **1×`201`** y **1×`409`** (CON-01).
-
----
-
-## 🛠️ Notas y solución de problemas
-
-- **Apple Silicon (M1/M2/M3)**: la imagen de SQL Server es solo `amd64`; el `docker-compose.yml`
-  fuerza `platform: linux/amd64` para correr bajo emulación. En máquinas amd64 (Linux/Windows
-  Intel) corre de forma nativa.
-- **`Login failed for user 'sa'`**: la `DB_PASSWORD` del `.env` no coincide con la del contenedor,
-  o la base `medical_appointments` aún no existe (paso 4).
-- **`self-signed certificate`**: asegúrate de tener `trustServerCertificate: true` en
-  `src/database/data-source.ts` (ya configurado para local).
-- **El contenedor "no arranca" / cuelga**: SQL Server tarda en aceptar conexiones la primera vez;
-  espera ~1 min y reintenta.
-- **Resetear todo desde cero**:
-  ```bash
-  docker compose down -v   # borra el contenedor y su volumen de datos
-  docker compose up -d
-  # repetir pasos 4 y 5
-  ```
+Las pruebas con DB usan una base separada `medical_appointments_test` con auto-schema
+(paso 4 de la instalación), por lo que no tocan los datos de desarrollo.

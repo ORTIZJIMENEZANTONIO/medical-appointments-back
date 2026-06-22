@@ -17,7 +17,7 @@ const databaseName = isTest
   : process.env.DB_NAME;
 
 export const dataSourceOptions: DataSourceOptions = {
-  type: 'mssql',
+  type: 'mysql',
   host: process.env.DB_HOST,
   port: Number(process.env.DB_PORT),
   username: process.env.DB_USERNAME,
@@ -27,12 +27,9 @@ export const dataSourceOptions: DataSourceOptions = {
   migrations: [__dirname + '/../migrations/*{.ts,.js}'],
   synchronize: isTest, // tests: auto-schema; dev/prod: migraciones (única fuente de verdad)
   logging: process.env.NODE_ENV === 'development',
-  options: {
-    encrypt: false, // local; en prod: true con certificado válido
-    trustServerCertificate: true, // confía en el cert autofirmado del contenedor local
-  },
 };
 
-// Usado por el CLI de TypeORM (migration:generate / run / revert)
-export const AppDataSource = new DataSource(dataSourceOptions);
+// Usado por el CLI de TypeORM (migration:generate / run / revert).
+// Solo un export de tipo DataSource (el default) — el CLI lo exige.
+const AppDataSource = new DataSource(dataSourceOptions);
 export default AppDataSource;

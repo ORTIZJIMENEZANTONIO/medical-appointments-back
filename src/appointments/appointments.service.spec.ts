@@ -45,7 +45,13 @@ describe('AppointmentsService (unit)', () => {
       save: jest.fn((value) => Promise.resolve({ id: 1, ...value })),
     };
     const dataSource = {
-      transaction: jest.fn((cb: (m: typeof manager) => unknown) => cb(manager)),
+      // Soporta transaction(cb) y transaction(isolationLevel, cb)
+      transaction: jest.fn((arg1: unknown, arg2?: unknown) => {
+        const cb = (typeof arg1 === 'function' ? arg1 : arg2) as (
+          m: typeof manager,
+        ) => unknown;
+        return cb(manager);
+      }),
     };
 
     const moduleRef = await Test.createTestingModule({

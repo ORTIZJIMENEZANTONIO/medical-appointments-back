@@ -37,6 +37,7 @@
     "dotenv": "^17.4.2",
     "helmet": "^8.2.0",
     "mssql": "^12.5.5",
+    "mysql2": "^3.22.5",
     "nestjs-pino": "^4.6.1",
     "pino-http": "^11.0.0",
     "reflect-metadata": "^0.2.2",

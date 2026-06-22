@@ -30,13 +30,9 @@ export class AppointmentsService {
     createAppointmentDto: CreateAppointmentDto,
   ): Promise<Appointment> {
     const appointmentDate = new Date(createAppointmentDto.appointmentDate);
-    // La columna es datetime2(0) (precisión de segundos). Normalizamos los
-    // milisegundos a 0 para que el valor guardado y la ventana de overlap usen
-    // la MISMA precisión — si no, el redondeo de sub-segundos de SQL Server
-    // provoca falsos empalmes en el borde (ej. citas back-to-back a +30 min).
+
     appointmentDate.setMilliseconds(0);
-    // Con duración fija de 30 min, dos citas se cruzan si el inicio de la
-    // existente cae dentro de (inicio - 30min, inicio + 30min). Ventana sargable.
+
     const limitStart = new Date(
       appointmentDate.getTime() - APPOINTMENT_DURATION_MINUTES * 60000,
     );
@@ -44,7 +40,7 @@ export class AppointmentsService {
       appointmentDate.getTime() + APPOINTMENT_DURATION_MINUTES * 60000,
     );
 
-    return this.dataSource.transaction(async (manager) => {
+    return this.dataSource.transaction('READ COMMITTED', async (manager) => {
       // Lock pesimista sobre el doctor → serializa las reservas de ESTE doctor.
       const doctor = await manager
         .createQueryBuilder(Doctor, 'd')
@@ -67,15 +63,15 @@ export class AppointmentsService {
         `
         SELECT COUNT(id) AS count
         FROM appointments
-        WHERE doctor_id = @0
-          AND status_id = @1
-          AND appointment_date > @2
-          AND appointment_date < @3
+        WHERE doctor_id = ?
+          AND status_id = ?
+          AND appointment_date > ?
+          AND appointment_date < ?
         `,
         [createAppointmentDto.doctorId, STATUS_ACTIVE, limitStart, limitEnd],
       );
 
-      if (overlapping[0].count > 0) {
+      if (Number(overlapping[0].count) > 0) {
         throw new AppointmentOverlapException();
       }
 
@@ -130,7 +126,7 @@ export class AppointmentsService {
   }
 
   async cancel(id: number): Promise<Appointment> {
-    return this.dataSource.transaction(async (manager) => {
+    return this.dataSource.transaction('READ COMMITTED', async (manager) => {
       const appointment = await manager.findOne(Appointment, { where: { id } });
       if (!appointment) {
         throw new NotFoundException(ERRORS.APPOINTMENT_NOT_FOUND);

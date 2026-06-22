@@ -1,10 +1,10 @@
 import { Appointment } from 'src/appointments/entities/appointment.entity';
 import {
-  PrimaryGeneratedColumn,
   Column,
+  CreateDateColumn,
   Entity,
   OneToMany,
-  CreateDateColumn,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
 
 @Entity('patients')
@@ -18,14 +18,8 @@ export class Patient {
   @Column({ type: 'varchar', length: 50, name: 'last_name_1' })
   lastname1: string;
 
-  @Column({
-    type: 'varchar',
-    length: 50,
-    default: null,
-    nullable: true,
-    name: 'last_name_2',
-  })
-  lastname2?: string | null;
+  @Column({ type: 'varchar', length: 50, name: 'last_name_2', nullable: true })
+  lastname2?: string | null; // apellido materno: opcional en México
 
   @Column({ type: 'varchar', length: 150, unique: true })
   email: string;
@@ -33,12 +27,7 @@ export class Patient {
   @Column({ type: 'varchar', length: 10 })
   phone: string;
 
-  @CreateDateColumn({
-    type: 'datetime2',
-    precision: 0,
-    default: () => 'GETDATE()',
-    name: 'created_at',
-  })
+  @CreateDateColumn({ type: 'datetime', name: 'created_at' })
   createdAt: Date;
 
   @OneToMany(() => Appointment, (a) => a.patient)

@@ -8,19 +8,14 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
-  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
 @Entity('appointments')
-// Índice que optimiza el chequeo de solapamiento: igualdad en doctor+status, rango en fecha
+// Índice que optimiza el chequeo de solapamiento: igualdad en doctor+status, rango en fecha.
+// Nota: MySQL no soporta índices únicos parciales (filtered index), así que el anti-empalme
+// se garantiza con el lock pesimista + el chequeo de overlap en el service (no a nivel DB).
 @Index('IDX_overlap_check', ['doctorId', 'statusId', 'appointmentDate'])
-// (Opcional, defensa a nivel DB) impide 2 citas ACTIVAS del mismo doctor en el MISMO instante.
-// Filtered index = feature de SQL Server. El solapamiento general (±30min) lo cubre el service.
-@Index('UQ_doctor_active_slot', ['doctorId', 'appointmentDate'], {
-  unique: true,
-  where: 'status_id = 1',
-})
 export class Appointment {
   @PrimaryGeneratedColumn()
   id: number;
@@ -42,35 +37,23 @@ export class Appointment {
   patientId: number;
 
   // --- Status (FK al catálogo, TINYINT) ---
-  @ManyToOne(() => AppointmentStatus, (s) => s.appointments, {
-    nullable: false,
-  })
+  @ManyToOne(() => AppointmentStatus, (s) => s.appointments, { nullable: false })
   @JoinColumn({ name: 'status_id' })
   status: AppointmentStatus;
 
   @Column({ type: 'tinyint', name: 'status_id', default: 1 })
   statusId: number;
 
-  @Column({ type: 'varchar', length: 255, nullable: true, default: null })
+  @Column({ type: 'varchar', length: 255, nullable: true })
   reason: string | null;
 
-  /** Fecha + hora de inicio. Duración fija 30min → el fin se deriva (DATEADD en el overlap). */
-  @Column({ type: 'datetime2', precision: 0, name: 'appointment_date' })
+  /** Fecha + hora de inicio. Duración fija 30 min → el fin se deriva (en el overlap). */
+  @Column({ type: 'datetime', precision: 0, name: 'appointment_date' })
   appointmentDate: Date;
 
-  @CreateDateColumn({
-    type: 'datetime2',
-    precision: 0,
-    default: () => 'GETDATE()',
-    name: 'created_at',
-  })
+  @CreateDateColumn({ type: 'datetime', name: 'created_at' })
   createdAt: Date;
 
-  @Column({
-    type: 'datetime2',
-    precision: 0,
-    name: 'cancelled_at',
-    nullable: true,
-  })
+  @Column({ type: 'datetime', precision: 0, name: 'cancelled_at', nullable: true })
   cancelledAt: Date | null;
 }

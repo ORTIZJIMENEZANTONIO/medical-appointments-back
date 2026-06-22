@@ -1,15 +1,14 @@
 services:
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    platform: linux/amd64 # Asegura que se use la imagen para AMD64
-    container_name: medical-sqlserver
+  mysql:
+    image: mysql:8.0
+    container_name: medical-mysql
     environment:
-      - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=Promass@2026
-      - MSSQL_PID=Developer
+      MYSQL_ROOT_PASSWORD: Promass@2026
+      MYSQL_DATABASE: medical_appointments
     ports:
-      - "1433:1433"
+      - '3306:3306'
     volumes:
-      - sqlserver-data:/var/opt/mssql
+      - mysql-data:/var/lib/mysql
+
 volumes:
-  sqlserver-data:
+  mysql-data:

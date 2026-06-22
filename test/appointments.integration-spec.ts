@@ -53,8 +53,7 @@ describe('Appointments (integration, real DB)', () => {
 
     // Catálogo de estados (synchronize crea las tablas vacías)
     await dataSource.query(
-      `IF NOT EXISTS (SELECT 1 FROM appointment_status WHERE id = 1)
-         INSERT INTO appointment_status (id, name) VALUES (1, 'ACTIVE'), (2, 'CANCELLED');`,
+      `INSERT IGNORE INTO appointment_status (id, name) VALUES (1, 'ACTIVE'), (2, 'CANCELLED');`,
     );
   });
 
@@ -213,7 +212,7 @@ describe('Appointments (integration, real DB)', () => {
 
     // Invariante DURO: en la BD existe UNA sola cita para ese doctor/horario.
     const rows: Array<{ count: number }> = await dataSource.query(
-      'SELECT COUNT(*) AS count FROM appointments WHERE doctor_id = @0',
+      'SELECT COUNT(*) AS count FROM appointments WHERE doctor_id = ?',
       [doctor.id],
     );
     expect(Number(rows[0].count)).toBe(1);
@@ -249,7 +248,7 @@ describe('Appointments (integration, real DB)', () => {
     expect(fulfilled).toHaveLength(ATTEMPTS);
 
     const rows: Array<{ count: number }> = await dataSource.query(
-      'SELECT COUNT(*) AS count FROM appointments WHERE doctor_id = @0',
+      'SELECT COUNT(*) AS count FROM appointments WHERE doctor_id = ?',
       [doctor.id],
     );
     expect(Number(rows[0].count)).toBe(ATTEMPTS);

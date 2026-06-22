@@ -15,10 +15,9 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRoot(dataSourceOptions as DataSourceOptions),
-    ThrottlerModule.forRoot({
-      ttl: 60 /* ventana de 60 segundos */,
-      limit: 100 /* máx 100 solicitudes por IP */,
-    } as any),
+    ThrottlerModule.forRoot([
+      { ttl: 60_000 /* ventana de 60 s (en ms) */, limit: 100 /* máx por IP */ },
+    ]),
     LoggerModule.forRoot({
       pinoHttp: {
         transport:

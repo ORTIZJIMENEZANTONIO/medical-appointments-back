@@ -64,8 +64,7 @@ describe('Medical Appointments API (e2e)', () => {
 
     dataSource = app.get(DataSource);
     await dataSource.query(
-      `IF NOT EXISTS (SELECT 1 FROM appointment_status WHERE id = 1)
-         INSERT INTO appointment_status (id, name) VALUES (1, 'ACTIVE'), (2, 'CANCELLED');`,
+      `INSERT IGNORE INTO appointment_status (id, name) VALUES (1, 'ACTIVE'), (2, 'CANCELLED');`,
     );
   });
 
