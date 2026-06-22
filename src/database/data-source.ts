@@ -9,16 +9,23 @@ import { AppointmentStatus } from 'src/appointment-status/entities/appointment-s
 // El .env sobrescribe cualquier variable ya presente en el shell.
 dotenv.config({ override: true });
 
+// En tests (Jest fija NODE_ENV='test') se usa una BD separada con auto-schema,
+// para no tocar datos de desarrollo ni depender de correr migraciones.
+const isTest = process.env.NODE_ENV === 'test';
+const databaseName = isTest
+  ? `${process.env.DB_NAME}_test`
+  : process.env.DB_NAME;
+
 export const dataSourceOptions: DataSourceOptions = {
   type: 'mssql',
   host: process.env.DB_HOST,
   port: Number(process.env.DB_PORT),
   username: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+  database: databaseName,
   entities: [Patient, Doctor, Appointment, AppointmentStatus],
   migrations: [__dirname + '/../migrations/*{.ts,.js}'],
-  synchronize: false, // las migraciones son la única fuente de verdad del schema
+  synchronize: isTest, // tests: auto-schema; dev/prod: migraciones (única fuente de verdad)
   logging: process.env.NODE_ENV === 'development',
   options: {
     encrypt: false, // local; en prod: true con certificado válido

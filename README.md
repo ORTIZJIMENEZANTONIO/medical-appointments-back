@@ -123,8 +123,9 @@ La API queda en **http://localhost:3000** y la documentación Swagger en
 | `yarn migration:run` | Aplica las migraciones pendientes |
 | `yarn migration:revert` | Revierte la última migración |
 | `yarn migration:generate` | Genera una migración nueva desde las entidades *(solo en desarrollo)* |
-| `yarn test` | Pruebas unitarias |
-| `yarn test:e2e` | Pruebas end-to-end |
+| `yarn test` | Pruebas unitarias (sin DB) |
+| `yarn test:int` | Pruebas de integración (DB real) |
+| `yarn test:e2e` | Pruebas end-to-end (HTTP + DB) |
 | `yarn lint` | Linter (ESLint + Prettier) |
 
 ---
@@ -190,41 +191,6 @@ cancelled_at (nullable)
 
 ---
 
-## 🏛️ Decisiones de arquitectura
-
-- **Organización modular por feature** (`doctors/`, `patients/`, `appointments/`) — idiomática
-  de NestJS; cada módulo encapsula controller, service, entity y DTOs. Lo transversal
-  (filtros, interceptores, excepciones de dominio) vive en `common/`.
-
-- **Separación entidad ↔ DTO**: las entidades modelan la persistencia; los DTOs son el
-  contrato público de la API (validan y documentan). El cliente nunca envía `id`, `status`
-  ni timestamps — los controla el backend.
-
-- **Migraciones, no `synchronize`**: el schema está versionado. `synchronize: false` para que
-  las migraciones sean la única fuente de verdad del esquema (como en producción). El catálogo
-  de estados se siembra con una **migración dedicada** → `migration:run` deja la base 100% lista.
-
-- **Prevención de empalmes a nivel de base de datos, no de aplicación**: el chequeo de traslape
-  se hace dentro de una **transacción** que serializa las reservas por doctor. Entre "verifiqué
-  que está libre" e "inserté" no cabe otra petición → es la garantía real contra el doble-booking
-  bajo concurrencia. (Ver [Reglas de negocio](#-reglas-de-negocio).)
-
-- **Catálogo de estados normalizado** (`appointment_status`) en lugar de un ENUM/string suelto,
-  con `TINYINT` (0–255, el "unsigned" natural de SQL Server).
-
-- **Errores de dominio desacoplados del transporte**: el service lanza excepciones de negocio
-  (`AppointmentOverlapException` → 409) y las de Nest (`NotFoundException` → 404,
-  `ConflictException` → 409); un `GlobalExceptionFilter` las traduce a HTTP con un formato de
-  error consistente. El service nunca conoce HTTP → es testeable puro.
-
-### Notas específicas de SQL Server
-- **No existe `UNSIGNED`** salvo `TINYINT`. Por eso los PK son `INT IDENTITY` (siempre positivos
-  en la práctica) y el catálogo de estados usa `TINYINT`.
-- Tipo de fecha: **`datetime2`** (más preciso y con mayor rango que `datetime`).
-- El traslape se resuelve con **lock pesimista** (`setLock('pessimistic_write')` → `WITH (UPDLOCK, ROWLOCK)`)
-  sobre la fila del doctor dentro de una transacción — equivalente al `SELECT ... FOR UPDATE` de otros
-  motores. Serializa las reservas por doctor; doctores distintos siguen en paralelo.
-
 ### Decisiones de dominio (México)
 - **Teléfono**: 10 dígitos numéricos (estándar nacional MX desde 2022), almacenado **como string** —
   un teléfono no es un número (no se hace aritmética con él y podría perder ceros a la izquierda).
@@ -240,33 +206,34 @@ cancelled_at (nullable)
 - **Por qué importa**: en agendas médicas el manejo inconsistente de zonas es causa clásica de
   "empalmes fantasma". Centralizar en UTC y dejar la presentación local al frontend elimina esa clase de bug.
 
----
-
-## 📐 Reglas de negocio
-
-1. **Cita = 30 minutos fijos.** Solo se guarda el inicio (`appointment_date`); el fin se deriva
-   (`DATEADD(minute, 30, appointment_date)`).
-2. **Un doctor no puede tener citas que se traslapen.** Se valida que no exista otra cita
-   **activa** del mismo doctor cuyo intervalo `[inicio, inicio+30min)` se cruce con el nuevo.
-3. **Solo fechas/horas futuras.** Validado en el DTO con `@IsFutureDate`; una fecha pasada (o fuera de
-   la ventana permitida) se rechaza con `400`.
-4. **Estados**: `ACTIVE` (1) / `CANCELLED` (2). Cancelar no borra — cambia el estado y sella
-   `cancelled_at`.
-5. **Las citas canceladas no bloquean disponibilidad**: el chequeo de traslape solo considera
-   citas con `status_id = 1` (ACTIVE), por lo que una cita cancelada libera el horario.
 
 ---
 
 ## 🧪 Pruebas
 
+Estrategia en **pirámide** (muchas unit, algunas de integración, pocas e2e). La matriz
+completa de casos está en [`docs/test-matrix.md`](docs/test-matrix.md).
+
+| Capa | Comando | Necesita DB | Qué valida |
+|------|---------|-------------|------------|
+| Unitarias | `yarn test` | ❌ (repos mockeados) | Lógica de services y del validador de fecha |
+| Integración | `yarn test:int` | ✅ | Overlap real (SQL), back-to-back, multi-doctor, cancelación libera horario, **concurrencia** |
+| End-to-end | `yarn test:e2e` | ✅ | Stack HTTP completo: ruteo, `ValidationPipe`, filtro de errores, persistencia |
+
+**Base de datos de prueba** (solo para `test:int` / `test:e2e`): se usa una BD separada
+`${DB_NAME}_test` con auto-schema (no toca datos de desarrollo). Créala una vez:
+
 ```bash
-yarn test       # unitarias
-yarn test:e2e   # end-to-end
+docker exec -it medical-sqlserver /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P 'Promass@2026' -C \
+  -Q "IF DB_ID('medical_appointments_test') IS NULL CREATE DATABASE medical_appointments_test"
 ```
 
 Casos clave cubiertos (núcleo de la prueba):
-- Se **rechaza** una cita que se traslapa con otra activa del mismo doctor → `409`.
-- Una cita en horario de una cita **cancelada** se puede agendar → `201`.
+- **Empalme** del mismo doctor → `409` (CIT-08).
+- **Back-to-back** (cita exactamente +30 min) → permitido `201` (CIT-10).
+- Cita en horario de una cita **cancelada** → permitido `201` (CIT-12 / CAN-05).
+- **Concurrencia**: dos creaciones simultáneas del mismo slot → exactamente **1×`201`** y **1×`409`** (CON-01).
 
 ---
 
