@@ -127,18 +127,33 @@ export class AppointmentsService {
 
   async cancel(id: number): Promise<Appointment> {
     return this.dataSource.transaction('READ COMMITTED', async (manager) => {
-      const appointment = await manager.findOne(Appointment, { where: { id } });
-      if (!appointment) {
-        throw new NotFoundException(ERRORS.APPOINTMENT_NOT_FOUND);
-      }
-      if (appointment.statusId === STATUS_CANCELLED) {
+      // Transición atómica: solo cancela si la cita sigue ACTIVA. El guard va en el
+      // WHERE, no en una lectura previa, para que dos cancelaciones concurrentes de la
+      // misma cita no puedan pasar ambas (sin esto, ambas leerían ACTIVE y responderían
+      // 200; aquí solo una toca 1 fila y la otra cae al 404/409 según corresponda).
+      const result = await manager.update(
+        Appointment,
+        { id, statusId: STATUS_ACTIVE },
+        { statusId: STATUS_CANCELLED, cancelledAt: new Date() },
+      );
+
+      if (result.affected === 0) {
+        // No se actualizó nada: o la cita no existe, o ya estaba cancelada.
+        const appointment = await manager.findOne(Appointment, {
+          where: { id },
+        });
+        if (!appointment) {
+          throw new NotFoundException(ERRORS.APPOINTMENT_NOT_FOUND);
+        }
         throw new ConflictException(ERRORS.APPOINTMENT_ALREADY_CANCELLED);
       }
 
-      appointment.statusId = STATUS_CANCELLED;
-      appointment.cancelledAt = new Date();
-
-      return manager.save(appointment);
+      // Releemos dentro de la misma transacción (la repo externa no vería el UPDATE
+      // aún sin commitear bajo READ COMMITTED).
+      return manager.findOneOrFail(Appointment, {
+        where: { id },
+        relations: ['doctor', 'patient', 'status'],
+      });
     });
   }
 }

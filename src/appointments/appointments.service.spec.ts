@@ -16,9 +16,11 @@ describe('AppointmentsService (unit)', () => {
   let manager: {
     createQueryBuilder: jest.Mock;
     findOne: jest.Mock;
+    findOneOrFail: jest.Mock;
     query: jest.Mock;
     create: jest.Mock;
     save: jest.Mock;
+    update: jest.Mock;
   };
   let qb: { setLock: jest.Mock; where: jest.Mock; getOne: jest.Mock };
 
@@ -40,9 +42,11 @@ describe('AppointmentsService (unit)', () => {
     manager = {
       createQueryBuilder: jest.fn().mockReturnValue(qb),
       findOne: jest.fn(),
+      findOneOrFail: jest.fn(),
       query: jest.fn(),
       create: jest.fn((_entity, value) => value),
       save: jest.fn((value) => Promise.resolve({ id: 1, ...value })),
+      update: jest.fn(),
     };
     const dataSource = {
       // Soporta transaction(cb) y transaction(isolationLevel, cb)
@@ -107,21 +111,35 @@ describe('AppointmentsService (unit)', () => {
   });
 
   describe('cancel', () => {
-    it('cancela una cita activa (status → 2, sella cancelledAt)', async () => {
-      manager.findOne.mockResolvedValue({ id: 5, statusId: 1 });
+    it('cancela una cita activa vía UPDATE condicional (affected=1)', async () => {
+      // El UPDATE atómico solo toca la fila si seguía ACTIVA.
+      manager.update.mockResolvedValue({ affected: 1 });
+      manager.findOneOrFail.mockResolvedValue({
+        id: 5,
+        statusId: 2,
+        cancelledAt: new Date(),
+      });
 
       const res = await service.cancel(5);
 
+      // El guard ACTIVE va en el WHERE del UPDATE, no en una lectura previa.
+      expect(manager.update).toHaveBeenCalledWith(
+        Appointment,
+        { id: 5, statusId: 1 },
+        expect.objectContaining({ statusId: 2, cancelledAt: expect.any(Date) }),
+      );
       expect(res.statusId).toBe(2);
       expect(res.cancelledAt).toBeInstanceOf(Date);
     });
 
-    it('lanza 404 si la cita no existe', async () => {
+    it('lanza 404 si la cita no existe (affected=0 + no encontrada)', async () => {
+      manager.update.mockResolvedValue({ affected: 0 });
       manager.findOne.mockResolvedValue(null);
       await expect(service.cancel(5)).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('lanza 409 si la cita ya está cancelada', async () => {
+    it('lanza 409 si la cita ya está cancelada (affected=0 + existe)', async () => {
+      manager.update.mockResolvedValue({ affected: 0 });
       manager.findOne.mockResolvedValue({ id: 5, statusId: 2 });
       await expect(service.cancel(5)).rejects.toBeInstanceOf(ConflictException);
     });
